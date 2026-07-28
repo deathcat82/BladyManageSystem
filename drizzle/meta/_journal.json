@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1785210070619,
+      "tag": "0000_bored_mattie_franklin",
+      "breakpoints": true
+    }
+  ]
+}
