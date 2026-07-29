@@ -2,7 +2,9 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "blady-brow-demo",
   "compatibility_date": "2026-05-15",
+  "compatibility_flags": ["nodejs_compat"],
   "main": "./worker/index.ts",
   "workers_dev": true,
-  "preview_urls": false
+  "preview_urls": false,
+  "d1_databases": [{ "binding": "DB", "database_name": "lulu-studio-demo-db", "database_id": "800d7d34-39f7-48ee-9567-c76948f8bb06", "migrations_dir": "./drizzle" }]
 }
