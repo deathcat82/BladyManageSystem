@@ -5,6 +5,7 @@ type JsonRecord = Record<string, unknown>;
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
 const asText = (value: unknown) => typeof value === "string" ? value.trim() : "";
+const normalizedPhone = (value: unknown) => asText(value).replace(/[\s\-()]/g, "");
 const asNumber = (value: unknown, fallback: number) => {
   const valueAsNumber = Number(value);
   return Number.isFinite(valueAsNumber) ? valueAsNumber : fallback;
@@ -71,6 +72,10 @@ export async function POST(request: Request) {
 
     if (action === "createCustomer") {
       if (missing(body, ["fullName", "phone", "birthday"])) return json({ error: "請填寫姓名、電話與生日。" }, 400);
+      const phone = normalizedPhone(body.phone);
+      const records = await db.prepare("SELECT full_name, phone FROM customers").all<{ full_name: string; phone: string }>();
+      const duplicate = (records.results || []).find((customer) => normalizedPhone(customer.phone) === phone);
+      if (duplicate) return json({ error: "此電話已存在於客戶庫：" + duplicate.full_name + "。" }, 409);
       const customerId = id();
       await db.prepare("INSERT INTO customers (id, full_name, phone, line_id, birthday, referral_source, note, marketing_consent, reminder_consent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(customerId, asText(body.fullName), asText(body.phone), asText(body.lineId), asText(body.birthday), asText(body.referralSource), asText(body.note), body.marketingConsent ? 1 : 0, body.reminderConsent ? 1 : 0, stamp, stamp).run();

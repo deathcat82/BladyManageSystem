@@ -42,30 +42,47 @@ export async function POST(request: Request, context: Context) {
 
     const fullName = asText(body.fullName);
     const phone = asText(body.phone);
+    const lineId = asText(body.lineId);
     const birthday = asText(body.birthday);
+    const referralSource = asText(body.referralSource);
     const signature = asText(body.signature);
     const photoAuthorization = asText(body.photoAuthorization);
-    const notices = Array.isArray(body.notices) ? body.notices.map(asText).filter(Boolean) : [];
-    const confirmations = Array.isArray(body.confirmations) ? body.confirmations.map(asText).filter(Boolean) : [];
-
-    if (!fullName || !phone || !birthday || !signature || !photoAuthorization || notices.length < 6 || confirmations.length < 2) {
-      return json({ error: "請完成基本資料、服務須知、照片授權、服務確認與手寫簽名。" }, 400);
-    }
+    const notices = Array.isArray(body.notices) ? Array.from(new Set(body.notices.map(asText).filter(Boolean))) : [];
+    const healthDisclosures = Array.isArray(body.healthDisclosures) ? Array.from(new Set(body.healthDisclosures.map(asText).filter(Boolean))) : [];
+    const healthConditions = Array.isArray(body.healthConditions) ? Array.from(new Set(body.healthConditions.map(asText).filter(Boolean))) : [];
+    const lipConditions = Array.isArray(body.lipConditions) ? Array.from(new Set(body.lipConditions.map(asText).filter(Boolean))) : [];
+    const confirmations = Array.isArray(body.confirmations) ? Array.from(new Set(body.confirmations.map(asText).filter(Boolean))) : [];
+    const healthDisclosureOther = asText(body.healthDisclosureOther);
+    const lipOther = asText(body.lipOther);
+    const marketingChoice = asText(body.marketingChoice);
+    const reminderChoice = asText(body.reminderChoice);
+    const incomplete: string[] = [];
+    if (!fullName || !phone || !lineId || !birthday || !referralSource) incomplete.push("基本資料");
+    if (notices.length !== 6) incomplete.push("服務須知全部同意項目");
+    if (!healthDisclosures.length || (healthDisclosures.includes("其他") && !healthDisclosureOther)) incomplete.push("健康揭露");
+    if (!healthConditions.length || (healthConditions.includes("以上皆非") && healthConditions.length > 1)) incomplete.push("健康狀況");
+    if (!lipConditions.length || (lipConditions.includes("以上皆非") && lipConditions.length > 1) || (lipConditions.includes("其他") && !lipOther)) incomplete.push("霧唇確認事項");
+    if (!photoAuthorization) incomplete.push("照片使用授權");
+    if (confirmations.length !== 2) incomplete.push("紋繡服務確認事項");
+    if (!["yes", "no"].includes(marketingChoice)) incomplete.push("生日優惠資訊意願");
+    if (!["yes", "no"].includes(reminderChoice)) incomplete.push("提醒通知意願");
+    if (!signature) incomplete.push("手寫簽名");
+    if (incomplete.length) return json({ error: "請補齊：" + incomplete.join("、") + "。" }, 400);
 
     const stamp = now();
     const customerId = crypto.randomUUID();
     const consume = db.prepare("UPDATE form_links SET status = 'used', used_at = ? WHERE id = ? AND status = 'active' AND expires_at > ?").bind(stamp, link.id, stamp);
     const customer = db.prepare("INSERT INTO customers (id, full_name, phone, line_id, birthday, referral_source, note, marketing_consent, reminder_consent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?)")
-      .bind(customerId, fullName, phone, asText(body.lineId), birthday, asText(body.referralSource), body.marketingConsent ? 1 : 0, body.reminderConsent ? 1 : 0, stamp, stamp);
+      .bind(customerId, fullName, phone, lineId, birthday, referralSource, marketingChoice === "yes" ? 1 : 0, reminderChoice === "yes" ? 1 : 0, stamp, stamp);
     const snapshot = JSON.stringify({
       version: "lulu-consent-2026-07-complete",
       submittedAt: stamp,
       notices,
-      healthDisclosures: Array.isArray(body.healthDisclosures) ? body.healthDisclosures.map(asText).filter(Boolean) : [],
-      healthConditions: Array.isArray(body.healthConditions) ? body.healthConditions.map(asText).filter(Boolean) : [],
-      lipConditions: Array.isArray(body.lipConditions) ? body.lipConditions.map(asText).filter(Boolean) : [],
+      healthDisclosures, healthDisclosureOther, healthConditions, lipConditions, lipOther,
       photoAuthorization,
       confirmations,
+      marketingConsent: marketingChoice === "yes",
+      reminderConsent: reminderChoice === "yes",
       formType: "綜合表單",
     });
     const consent = db.prepare("INSERT INTO consent_submissions (id, link_id, customer_id, service_type, consent_snapshot, signature_data_url, submitted_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
