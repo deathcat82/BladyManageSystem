@@ -25,6 +25,8 @@ export const appointments = sqliteTable("appointments", {
   startsAt: text("starts_at").notNull(),
   durationMinutes: integer("duration_minutes").notNull().default(120),
   status: text("status").notNull().default("scheduled"),
+  depositStatus: text("deposit_status").notNull().default("unpaid"),
+  depositAmount: integer("deposit_amount"),
   note: text("note").notNull().default(""),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

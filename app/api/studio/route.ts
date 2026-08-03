@@ -10,6 +10,7 @@ const asNumber = (value: unknown, fallback: number) => {
   const valueAsNumber = Number(value);
   return Number.isFinite(valueAsNumber) ? valueAsNumber : fallback;
 };
+const isQuarterHourStart = (value: string) => /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):(?:00|15|30|45)$/.test(value);
 const json = (payload: unknown, status = 200) => Response.json(payload, { status });
 
 async function hash(value: string) {
@@ -92,9 +93,18 @@ export async function POST(request: Request) {
 
     if (action === "saveAppointment") {
       if (missing(body, ["customerId", "serviceType", "startsAt"])) return json({ error: "請選擇客戶、服務與預約時間。" }, 400);
+      const startsAt = asText(body.startsAt);
+      if (!isQuarterHourStart(startsAt)) return json({ error: "預約時間的分鐘只能是 00、15、30 或 45。" }, 400);
+      const depositStatus = asText(body.depositStatus);
+      if (!['paid', 'unpaid'].includes(depositStatus)) return json({ error: "請選擇訂金狀態。" }, 400);
+      const rawDepositAmount = asText(body.depositAmount);
+      const depositAmount = Number(rawDepositAmount);
+      if (depositStatus === "paid" && (!Number.isInteger(depositAmount) || depositAmount < 100 || depositAmount > 5000)) {
+        return json({ error: "已付訂金金額須為 100 至 5000 元的整數。" }, 400);
+      }
       const appointmentId = asText(body.id) || id();
-      await db.prepare("INSERT INTO appointments (id, customer_id, service_type, starts_at, duration_minutes, status, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id = excluded.customer_id, service_type = excluded.service_type, starts_at = excluded.starts_at, duration_minutes = excluded.duration_minutes, status = excluded.status, note = excluded.note, updated_at = excluded.updated_at")
-        .bind(appointmentId, asText(body.customerId), asText(body.serviceType), asText(body.startsAt), asNumber(body.durationMinutes, 120), asText(body.status) || "scheduled", asText(body.note), stamp, stamp).run();
+      await db.prepare("INSERT INTO appointments (id, customer_id, service_type, starts_at, duration_minutes, status, deposit_status, deposit_amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id = excluded.customer_id, service_type = excluded.service_type, starts_at = excluded.starts_at, duration_minutes = excluded.duration_minutes, status = excluded.status, deposit_status = excluded.deposit_status, deposit_amount = excluded.deposit_amount, note = excluded.note, updated_at = excluded.updated_at")
+        .bind(appointmentId, asText(body.customerId), asText(body.serviceType), startsAt, asNumber(body.durationMinutes, 120), asText(body.status) || "scheduled", depositStatus, depositStatus === "paid" ? depositAmount : null, asText(body.note), stamp, stamp).run();
       return json({ ok: true, id: appointmentId });
     }
 

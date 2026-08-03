@@ -6,6 +6,9 @@ type Row = Record<string, unknown>;
 type Data = { customers: Row[]; appointments: Row[]; services: Row[]; links: Row[]; settings: Record<string, string> };
 
 const serviceTypes = ["霧眉", "霧唇", "補色", "其他"];
+const consentServiceItems = ["霧眉", "霧唇", "修眉", "唇色淡化"];
+const lipRelatedServiceItems = ["霧唇", "唇色淡化"];
+const appointmentMinutes = ["00", "15", "30", "45"];
 const notices = [
   "本人了解臉部骨骼、肌肉、皮膚狀態及曾接受醫美療程（如填充物、雷射、肉毒等），可能影響紋繡設計、位置判斷及術後呈現效果。",
   "本人了解紋繡效果會因個人體質、皮膚狀況、生活習慣及術後照護方式而有所差異，無法保證每位顧客呈現完全相同之效果。",
@@ -15,7 +18,7 @@ const notices = [
   "補色為依個人留色情況進行調整之服務，實際補色時間需依皮膚恢復狀況評估。因個人體質差異，無法保證每次皆達到相同留色效果。",
 ];
 const healthDisclosures = ["我必須將我所有醫美及醫療紀錄告知美容師，例如：臉部整形手術、長期服用止痛藥、阿斯匹靈。", "我沒有濫用藥物、酗酒等習慣", "我沒有懷孕", "我對藥物、食物、化妝品或相關產品沒有嚴重過敏反應", "其他"];
-const conditions = ["疤痕皮膚炎／溼疹", "紋身", "蟹足腫", "血友病", "心臟病", "癲癇", "糖尿病", "血液不易凝固", "肝炎／黃疸病", "帶狀皰疹／皮蛇", "近期身體不適或發燒", "以上皆非"];
+const conditions = ["疤痕皮膚炎／溼疹", "紋身", "蟹足腫", "血友病", "心臟病", "癲癇", "糖尿病", "血液不易凝固", "肝炎／黃疸病", "帶狀皰疹／皮蛇", "近期身體不適或發燒", "其他", "以上皆非"];
 const lips = ["唇皰疹／口角炎（包括 60 天內曾經罹患）", "口腔潰瘍", "以上皆非", "其他"];
 const photoOptions = ["僅作為本人術前術後紀錄保存", "同意遮蔽部分臉部後公開作品展示", "同意完整作品公開展示", "不同意任何公開使用"];
 const confirmationItems = ["我已閱讀並了解紋繡術後保養須知及相關注意事項，並同意依照服務人員提供之術後照護方式進行保養。", "本人確認以上資料皆由本人詳實填寫，若有任何健康狀況或特殊情形，應於施作前主動告知服務人員。"];
@@ -29,6 +32,12 @@ const customerName = (data: Data, id: string) => value(data.customers.find((item
 const monthLabel = (month: string) => new Date(month + "-01T12:00:00").toLocaleDateString("zh-TW", { year: "numeric", month: "long" });
 const taipeiDateTime = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Taipei", hour12: false }).replace(" ", "T").slice(0, 16);
 const plusDays = (day: string, days: number) => { const date = new Date(day + "T12:00:00+08:00"); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+const appointmentHours = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
+const appointmentParts = (source: string, fallbackDate: string) => {
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/.exec(source);
+  return { date: match?.[1] || fallbackDate, hour: appointmentHours.includes(match?.[2] || "") ? match![2] : "10", minute: appointmentMinutes.includes(match?.[3] || "") ? match![3] : "00" };
+};
+const appointmentStartsAt = (form: FormData) => `${String(form.get("appointmentDate") || "")}T${String(form.get("appointmentHour") || "")}:${String(form.get("appointmentMinute") || "")}`;
 
 async function post(action: string, payload: Row = {}) {
   const response = await fetch("/api/studio", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, ...payload }) });
@@ -59,35 +68,38 @@ function CheckGroup({ title, items, selected, update, required = false }: { titl
 
 function Intake({ token, home }: { token: string; home: () => void }) {
   const [ready, setReady] = useState(false), [error, setError] = useState(""), [signature, setSignature] = useState(""), [message, setMessage] = useState("");
-  const [noticeChecks, setNoticeChecks] = useState<string[]>([]), [disclosureChecks, setDisclosureChecks] = useState<string[]>([]), [conditionChecks, setConditionChecks] = useState<string[]>([]), [lipChecks, setLipChecks] = useState<string[]>([]), [confirmationChecks, setConfirmationChecks] = useState<string[]>([]), [photo, setPhoto] = useState("");
-  const [missing, setMissing] = useState<string[]>([]), [disclosureOther, setDisclosureOther] = useState(""), [lipOther, setLipOther] = useState("");
+  const [noticeChecks, setNoticeChecks] = useState<string[]>([]), [disclosureChecks, setDisclosureChecks] = useState<string[]>([]), [conditionChecks, setConditionChecks] = useState<string[]>([]), [lipChecks, setLipChecks] = useState<string[]>([]), [confirmationChecks, setConfirmationChecks] = useState<string[]>([]), [photo, setPhoto] = useState(""), [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [missing, setMissing] = useState<string[]>([]), [disclosureOther, setDisclosureOther] = useState(""), [conditionOther, setConditionOther] = useState(""), [lipOther, setLipOther] = useState("");
   useEffect(() => { void fetch("/api/intake/" + token).then(async (response) => { const result = await response.json() as Row; if (!response.ok || !result.active) setError(value(result, "reason") || "此表單無法使用。"); else setReady(true); }).catch(() => setError("無法讀取表單。")); }, [token]);
   if (error) return <div className="public-shell"><section className="public-card compact"><h1>此連結無法使用</h1><p className="muted">{error}</p><button className="button secondary" onClick={home}>回首頁</button></section></div>;
   if (!ready) return <div className="public-shell"><section className="public-card compact">正在讀取表單…</section></div>;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const requiresLipConfirmation = selectedServices.some((item) => lipRelatedServiceItems.includes(item));
     const required = [
       !String(form.get("fullName") || "").trim() && "姓名", !String(form.get("phone") || "").trim() && "電話", !String(form.get("lineId") || "").trim() && "LINE ID",
-      !String(form.get("birthday") || "").trim() && "生日", !String(form.get("referralSource") || "").trim() && "得知管道", noticeChecks.length !== notices.length && "服務須知全部同意項目",
+      !String(form.get("birthday") || "").trim() && "生日", !String(form.get("referralSource") || "").trim() && "得知管道", !selectedServices.length && "服務項目", noticeChecks.length !== notices.length && "服務須知全部同意項目",
       !disclosureChecks.length && "健康揭露", disclosureChecks.includes("其他") && !disclosureOther.trim() && "健康揭露的其他說明",
-      (!conditionChecks.length || (conditionChecks.includes("以上皆非") && conditionChecks.length > 1)) && "健康狀況",
-      (!lipChecks.length || (lipChecks.includes("以上皆非") && lipChecks.length > 1)) && "霧唇確認事項", lipChecks.includes("其他") && !lipOther.trim() && "霧唇確認的其他說明",
+      (!conditionChecks.length || (conditionChecks.includes("以上皆非") && conditionChecks.length > 1) || (conditionChecks.includes("其他") && !conditionOther.trim())) && "健康狀況",
+      (requiresLipConfirmation && (!lipChecks.length || (lipChecks.includes("以上皆非") && lipChecks.length > 1))) && "霧唇確認事項", lipChecks.includes("其他") && !lipOther.trim() && "霧唇確認的其他說明",
       !photo && "照片使用授權", confirmationChecks.length !== confirmationItems.length && "紋繡服務確認事項", !String(form.get("marketingChoice") || "") && "生日優惠資訊意願",
       !String(form.get("reminderChoice") || "") && "提醒通知意願", !signature && "手寫簽名",
     ].filter(Boolean) as string[];
     if (required.length) { setMissing(required); setMessage(""); return; }
     setMissing([]);
     try {
-      const response = await fetch("/api/intake/" + token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fullName: form.get("fullName"), phone: form.get("phone"), lineId: form.get("lineId"), birthday: form.get("birthday"), referralSource: form.get("referralSource"), marketingChoice: form.get("marketingChoice"), reminderChoice: form.get("reminderChoice"), notices: noticeChecks, healthDisclosures: disclosureChecks, healthDisclosureOther: disclosureOther, healthConditions: conditionChecks, lipConditions: lipChecks, lipOther, photoAuthorization: photo, confirmations: confirmationChecks, signature }) });
+      const response = await fetch("/api/intake/" + token, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fullName: form.get("fullName"), phone: form.get("phone"), lineId: form.get("lineId"), birthday: form.get("birthday"), referralSource: form.get("referralSource"), marketingChoice: form.get("marketingChoice"), reminderChoice: form.get("reminderChoice"), serviceItems: selectedServices, notices: noticeChecks, healthDisclosures: disclosureChecks, healthDisclosureOther: disclosureOther, healthConditions: conditionChecks, healthConditionOther: conditionOther, lipConditions: lipChecks, lipOther, photoAuthorization: photo, confirmations: confirmationChecks, signature }) });
       const result = await response.json() as Row; if (!response.ok) throw new Error(value(result, "error")); setMessage("已送出並保存，謝謝您。此連結現在已失效。");
     } catch (reason) { setMessage(reason instanceof Error ? reason.message : "送出失敗，請稍後重試。"); }
   };
+  const requiresLipConfirmation = selectedServices.some((item) => lipRelatedServiceItems.includes(item));
   return <div className="public-shell"><section className="public-card"><p className="eyebrow">LULU STUDIO 紋繡美學</p><h1>服務知情同意書</h1><p className="muted">請依自身服務項目與健康狀況完成所有合約內容。</p><form noValidate onSubmit={submit}>{missing.length > 0 && <div className="validation-summary" role="alert"><strong>尚有項目未完成：</strong><ul>{missing.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+    <section className="contract-block"><h2>本次施作項目 <em>＊</em></h2><p>可複選，請勾選本次要做的服務。</p>{consentServiceItems.map((item) => <label className="big-check" key={item}><input type="checkbox" checked={selectedServices.includes(item)} onChange={() => setSelectedServices(changeList(selectedServices, item))} /><span>{item}</span></label>)}</section>
     <section className="contract-block contract-notice"><div className="contract-heading">服務須知與注意事項</div><p>請仔細閱讀以下注意事項，確認內容無誤並了解後，請勾選「✓」表示同意 <em>＊</em></p>{notices.map((item) => <label className="big-check" key={item}><input type="checkbox" checked={noticeChecks.includes(item)} onChange={() => setNoticeChecks(changeList(noticeChecks, item))} /><span>{item}</span></label>)}</section>
     <CheckGroup title="為保障您的安全與服務品質，請確認是否有以下健康狀況或特殊情形。" items={healthDisclosures} selected={disclosureChecks} update={setDisclosureChecks} />{disclosureChecks.includes("其他") && <label className="other-field">健康揭露的其他說明<textarea value={disclosureOther} onChange={(event) => setDisclosureOther(event.target.value)} /></label>}
-    <CheckGroup title="若有以下健康狀況，請於施作前主動告知服務人員。" items={conditions} selected={conditionChecks} update={setConditionChecks} />
-    <CheckGroup title="霧唇施作者專屬確認事項" items={lips} selected={lipChecks} update={setLipChecks} />{lipChecks.includes("其他") && <label className="other-field">霧唇確認的其他說明<textarea value={lipOther} onChange={(event) => setLipOther(event.target.value)} /></label>}
+    <CheckGroup title="若有以下健康狀況，請於施作前主動告知服務人員。" items={conditions} selected={conditionChecks} update={setConditionChecks} />{conditionChecks.includes("其他") && <label className="other-field">健康狀況的其他說明<textarea value={conditionOther} onChange={(event) => setConditionOther(event.target.value)} /></label>}
+    <CheckGroup title="霧唇施作者專屬確認事項" items={lips} selected={lipChecks} update={setLipChecks} required={requiresLipConfirmation} />{lipChecks.includes("其他") && <label className="other-field">霧唇確認的其他說明<textarea value={lipOther} onChange={(event) => setLipOther(event.target.value)} /></label>}
     <section className="contract-block"><h2>照片使用授權 <em>＊</em></h2>{photoOptions.map((item) => <label className="big-check radio" key={item}><input type="radio" name="photo" required checked={photo === item} onChange={() => setPhoto(item)} /><span>{item}</span></label>)}</section>
     <CheckGroup title="紋繡服務確認事項" items={confirmationItems} selected={confirmationChecks} update={setConfirmationChecks} required />
     <div className="form-grid"><label>姓名<input name="fullName" /></label><label>電話<input name="phone" inputMode="tel" /></label><label>LINE ID<input name="lineId" /></label><label>生日<input name="birthday" type="date" /></label><label>得知管道<select name="referralSource" defaultValue=""><option value="" disabled>請選擇</option><option>Facebook</option><option>Instagram</option><option>親友介紹</option><option>Google 搜尋</option></select></label></div>
@@ -138,7 +150,89 @@ function CustomerSearch({ data, customerId, select }: { data: Data; customerId: 
   return <div className="customer-picker"><label>客戶搜尋<div className="search-input"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="姓名、電話或 LINE ID" /></div></label><input type="hidden" name="customerId" value={customerId} />{selected && <p className="selected-client">已選擇：{value(selected, "full_name")} · {value(selected, "phone")} <button type="button" onClick={() => select("")}>清除</button></p>}{query && <div className="customer-options">{results.map((item) => <button type="button" key={value(item, "id")} onClick={() => { select(value(item, "id")); setQuery(""); }}><strong>{value(item, "full_name")}</strong><span>{value(item, "phone")} · {value(item, "line_id") || "未填 LINE ID"}</span></button>)}{!results.length && <p className="muted">找不到符合的客戶。</p>}</div>}</div>;
 }
 
+function AppointmentFields({ startsAt = "", fallbackDate, depositStatus = "unpaid", depositAmount = "" }: { startsAt?: string; fallbackDate: string; depositStatus?: string; depositAmount?: string }) {
+  const parts = appointmentParts(startsAt, fallbackDate);
+  const [currentDepositStatus, setCurrentDepositStatus] = useState(depositStatus === "paid" ? "paid" : "unpaid");
+  return <div className="form-grid">
+    <label>預約日期<input required name="appointmentDate" type="date" defaultValue={parts.date} /></label>
+    <label>時<select name="appointmentHour" defaultValue={parts.hour}>{appointmentHours.map((hour) => <option key={hour} value={hour}>{hour}</option>)}</select></label>
+    <label>分<select name="appointmentMinute" defaultValue={parts.minute}>{appointmentMinutes.map((minute) => <option key={minute} value={minute}>{minute}</option>)}</select></label>
+    <label>訂金狀態<select name="depositStatus" value={currentDepositStatus} onChange={(event) => setCurrentDepositStatus(event.target.value)}><option value="unpaid">未付訂金</option><option value="paid">已付訂金</option></select></label>
+    {currentDepositStatus === "paid" && <label>訂金金額（元）<input required name="depositAmount" type="number" min="100" max="5000" step="1" inputMode="numeric" defaultValue={depositAmount} /></label>}
+  </div>;
+}
+
 function Calendar({ data, refresh, say }: { data: Data; refresh: () => Promise<void>; say: (message: string) => void }) {
+  const today = localDay();
+  const [month, setMonth] = useState(today.slice(0, 7));
+  const [date, setDate] = useState(today);
+  const [open, setOpen] = useState(false);
+  const [newClient, setNewClient] = useState("");
+  const [editAppointment, setEditAppointment] = useState("");
+  const [editCare, setEditCare] = useState("");
+  const [editClient, setEditClient] = useState("");
+  const [year, monthIndex] = month.split("-").map(Number);
+  const first = new Date(year, monthIndex - 1, 1).getDay();
+  const total = new Date(year, monthIndex, 0).getDate();
+  const dates = Array.from({ length: first + total }, (_, index) => index < first ? "" : `${month}-${String(index - first + 1).padStart(2, "0")}`);
+  const appointments = data.appointments.filter((item) => dateKey(value(item, "starts_at")) === date && value(item, "status") !== "cancelled");
+  const care = data.services.filter((item) => value(item, "care_at") === date);
+
+  const save = async (event: FormEvent<HTMLFormElement>, action: "saveAppointment" | "saveService", id = "", done?: () => void) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    if (!String(form.get("customerId") || "")) return say("請先從搜尋結果選擇客戶。");
+    const payload = action === "saveAppointment"
+      ? { id, customerId: form.get("customerId"), serviceType: form.get("serviceType"), startsAt: appointmentStartsAt(form), durationMinutes: form.get("durationMinutes"), status: form.get("status") || "scheduled", depositStatus: form.get("depositStatus"), depositAmount: form.get("depositAmount"), note: form.get("note") }
+      : { id, customerId: form.get("customerId"), serviceType: form.get("serviceType"), serviceAt: form.get("serviceAt"), careAt: form.get("careAt"), note: form.get("note") };
+    try {
+      await post(action, payload);
+      await refresh();
+      say("已保存。");
+      done?.();
+    } catch (reason) {
+      say(reason instanceof Error ? reason.message : "儲存失敗。");
+    }
+  };
+
+  const changeMonth = (delta: number) => {
+    const next = new Date(`${month}-01T12:00:00`);
+    next.setMonth(next.getMonth() + delta);
+    const nextMonth = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
+    setMonth(nextMonth);
+    setDate(`${nextMonth}-01`);
+    setOpen(false);
+  };
+
+  return <div className="calendar-layout">
+    <section className="panel">
+      <div className="calendar-head">
+        <button className="button secondary small" onClick={() => changeMonth(-1)}>上個月</button>
+        <label>選擇年月<input type="month" value={month} onChange={(event) => { setMonth(event.target.value); setDate(`${event.target.value}-01`); }} /></label>
+        <button className="button secondary small" onClick={() => changeMonth(1)}>下個月</button>
+      </div>
+      <h2>{monthLabel(month)}</h2>
+      <div className="calendar-week">{["日", "一", "二", "三", "四", "五", "六"].map((item) => <span key={item}>{item}</span>)}</div>
+      <div className="month-grid">{dates.map((item, index) => item ? <button key={item} className={item === date ? "day-cell selected-day" : "day-cell"} onClick={() => { setDate(item); setOpen(false); setEditAppointment(""); setEditCare(""); }}><b>{Number(item.slice(8))}</b><span className="event-marks">{data.appointments.some((row) => dateKey(value(row, "starts_at")) === item && value(row, "status") !== "cancelled") && <i className="appointment-mark" />}{data.services.some((row) => value(row, "care_at") === item) && <i className="care-mark" />}</span></button> : <span className="day-cell blank" key={index} />)}</div>
+    </section>
+    <section className="panel">
+      <p className="eyebrow">DAILY TODO</p>
+      <div className="section-title"><h2>{date} 待辦</h2><button className="button secondary small" onClick={() => { setOpen(!open); setNewClient(""); }}>{open ? "收合新增預約" : "新增預約"}</button></div>
+      <h3>預約</h3>
+      {appointments.map((item) => {
+        const isPaid = value(item, "deposit_status") === "paid";
+        return <article className="todo-card" key={value(item, "id")}><strong>{customerName(data, value(item, "customer_id"))} · {value(item, "service_type")}</strong><small>{showTime(value(item, "starts_at"))}</small><small>{isPaid ? `已付訂金 NT$${value(item, "deposit_amount")}` : "未付訂金"}</small><button type="button" className="text-button" onClick={() => { setEditAppointment(value(item, "id")); setEditCare(""); setEditClient(value(item, "customer_id")); }}>編輯</button>{editAppointment === value(item, "id") && <form className="todo-editor" onSubmit={(event) => void save(event, "saveAppointment", value(item, "id"), () => setEditAppointment(""))}><CustomerSearch data={data} customerId={editClient} select={setEditClient} /><label>服務<select name="serviceType" defaultValue={value(item, "service_type")}>{serviceTypes.map((type) => <option key={type}>{type}</option>)}</select></label><AppointmentFields startsAt={value(item, "starts_at")} fallbackDate={date} depositStatus={value(item, "deposit_status")} depositAmount={value(item, "deposit_amount")} /><label>時長（分鐘）<input name="durationMinutes" type="number" min="30" step="30" defaultValue={value(item, "duration_minutes") || "120"} /></label><label>狀態<select name="status" defaultValue={value(item, "status")}><option value="scheduled">已排定</option><option value="cancelled">已取消</option></select></label><label>備註<textarea name="note" defaultValue={value(item, "note")} /></label><button className="button secondary small">保存預約</button></form>}</article>;
+      })}
+      {!appointments.length && <p className="muted">本日尚無預約。</p>}
+      <h3>保養關心</h3>
+      {care.map((item) => <article className="todo-card" key={value(item, "id")}><strong>{customerName(data, value(item, "customer_id"))} · {value(item, "service_type")}</strong><small>服務時間：{showTime(value(item, "service_at"))}</small><button type="button" className="text-button" onClick={() => { setEditCare(value(item, "id")); setEditAppointment(""); setEditClient(value(item, "customer_id")); }}>編輯</button>{editCare === value(item, "id") && <form className="todo-editor" onSubmit={(event) => void save(event, "saveService", value(item, "id"), () => setEditCare(""))}><CustomerSearch data={data} customerId={editClient} select={setEditClient} /><label>服務<select name="serviceType" defaultValue={value(item, "service_type")}>{serviceTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label>服務時間<input required name="serviceAt" type="datetime-local" defaultValue={value(item, "service_at").slice(0, 16)} /></label><label>保養關心日<input name="careAt" type="date" defaultValue={value(item, "care_at")} /></label><label>服務紀錄<textarea required name="note" defaultValue={value(item, "note")} /></label><button className="button secondary small">保存服務紀錄</button></form>}</article>)}
+      {!care.length && <p className="muted">本日尚無保養關心。</p>}
+      {open && <form className="soft-form inset" onSubmit={(event) => void save(event, "saveAppointment", "", () => setOpen(false))}><CustomerSearch data={data} customerId={newClient} select={setNewClient} /><label>服務<select name="serviceType">{serviceTypes.map((type) => <option key={type}>{type}</option>)}</select></label><AppointmentFields fallbackDate={date} /><label>時長（分鐘）<input name="durationMinutes" type="number" min="30" step="30" defaultValue="120" /></label><label>備註<textarea name="note" /></label><button className="button primary">保存預約</button></form>}
+    </section>
+  </div>;
+}
+
+function CalendarV1({ data, refresh, say }: { data: Data; refresh: () => Promise<void>; say: (message: string) => void }) {
   const today = localDay(), [month, setMonth] = useState(today.slice(0, 7)), [date, setDate] = useState(today), [open, setOpen] = useState(false);
   const [newClient, setNewClient] = useState(""), [editAppointment, setEditAppointment] = useState(""), [editCare, setEditCare] = useState(""), [editClient, setEditClient] = useState("");
   const [year, monthIndex] = month.split("-").map(Number), first = new Date(year, monthIndex - 1, 1).getDay(), total = new Date(year, monthIndex, 0).getDate();
