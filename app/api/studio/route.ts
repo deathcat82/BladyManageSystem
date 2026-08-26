@@ -11,7 +11,20 @@ const asNumber = (value: unknown, fallback: number) => {
   return Number.isFinite(valueAsNumber) ? valueAsNumber : fallback;
 };
 const isQuarterHourStart = (value: string) => /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):(?:00|15|30|45)$/.test(value);
+const allowedSkinTypes = new Set(["", "油肌", "乾肌", "敏乾肌", "混合肌", "其他"]);
 const json = (payload: unknown, status = 200) => Response.json(payload, { status });
+
+async function duplicatePhone(db: D1Database, phone: unknown, excludedCustomerId = "") {
+  const normalized = normalizedPhone(phone);
+  if (!normalized) return undefined;
+  const records = await db.prepare("SELECT id, full_name, phone FROM customers").all<{ id: string; full_name: string; phone: string }>();
+  return (records.results || []).find((customer) => customer.id !== excludedCustomerId && normalizedPhone(customer.phone) === normalized);
+}
+
+async function customerExists(db: D1Database, customerId: unknown) {
+  const customer = await db.prepare("SELECT id FROM customers WHERE id = ?").bind(asText(customerId)).first<{ id: string }>();
+  return Boolean(customer);
+}
 
 async function hash(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -73,9 +86,7 @@ export async function POST(request: Request) {
 
     if (action === "createCustomer") {
       if (missing(body, ["fullName", "phone", "birthday"])) return json({ error: "請填寫姓名、電話與生日。" }, 400);
-      const phone = normalizedPhone(body.phone);
-      const records = await db.prepare("SELECT full_name, phone FROM customers").all<{ full_name: string; phone: string }>();
-      const duplicate = (records.results || []).find((customer) => normalizedPhone(customer.phone) === phone);
+      const duplicate = await duplicatePhone(db, body.phone);
       if (duplicate) return json({ error: "此電話已存在於客戶庫：" + duplicate.full_name + "。" }, 409);
       const customerId = id();
       await db.prepare("INSERT INTO customers (id, full_name, phone, line_id, birthday, referral_source, note, marketing_consent, reminder_consent, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
@@ -86,6 +97,8 @@ export async function POST(request: Request) {
     if (action === "updateCustomer") {
       if (!asText(body.id)) return json({ error: "缺少客戶識別碼。" }, 400);
       if (missing(body, ["fullName", "phone", "birthday"])) return json({ error: "請填寫姓名、電話與生日。" }, 400);
+      const duplicate = await duplicatePhone(db, body.phone, asText(body.id));
+      if (duplicate) return json({ error: "此電話已存在於客戶庫：" + duplicate.full_name + "。" }, 409);
       await db.prepare("UPDATE customers SET full_name = ?, phone = ?, line_id = ?, birthday = ?, referral_source = ?, note = ?, marketing_consent = ?, reminder_consent = ?, updated_at = ? WHERE id = ?")
         .bind(asText(body.fullName), asText(body.phone), asText(body.lineId), asText(body.birthday), asText(body.referralSource), asText(body.note), body.marketingConsent ? 1 : 0, body.reminderConsent ? 1 : 0, stamp, asText(body.id)).run();
       return json({ ok: true });
@@ -93,6 +106,7 @@ export async function POST(request: Request) {
 
     if (action === "saveAppointment") {
       if (missing(body, ["customerId", "serviceType", "startsAt"])) return json({ error: "請選擇客戶、服務與預約時間。" }, 400);
+      if (!await customerExists(db, body.customerId)) return json({ error: "找不到指定客戶，請重新選擇客戶。" }, 404);
       const startsAt = asText(body.startsAt);
       if (!isQuarterHourStart(startsAt)) return json({ error: "預約時間的分鐘只能是 00、15、30 或 45。" }, 400);
       const depositStatus = asText(body.depositStatus);
@@ -110,9 +124,16 @@ export async function POST(request: Request) {
 
     if (action === "saveService") {
       if (missing(body, ["customerId", "serviceType", "serviceAt"])) return json({ error: "請選擇客戶、服務與服務時間。" }, 400);
+      if (!await customerExists(db, body.customerId)) return json({ error: "找不到指定客戶，請重新選擇客戶。" }, 404);
+      const serviceAt = asText(body.serviceAt);
+      if (!isQuarterHourStart(serviceAt)) return json({ error: "服務時間的分鐘只能是 00、15、30 或 45。" }, 400);
+      const skinType = asText(body.skinType);
+      const hasSkinType = typeof body.skinType === "string";
+      const hasOperationColor = typeof body.operationColor === "string";
+      if (hasSkinType && !allowedSkinTypes.has(skinType)) return json({ error: "皮膚狀況選項無效。" }, 400);
       const serviceId = asText(body.id) || id();
-      await db.prepare("INSERT INTO service_records (id, customer_id, service_at, service_type, note, care_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id = excluded.customer_id, service_at = excluded.service_at, service_type = excluded.service_type, note = excluded.note, care_at = excluded.care_at, updated_at = excluded.updated_at")
-        .bind(serviceId, asText(body.customerId), asText(body.serviceAt), asText(body.serviceType), asText(body.note), asText(body.careAt) || null, stamp, stamp).run();
+      await db.prepare("INSERT INTO service_records (id, customer_id, service_at, service_type, note, care_at, operation_color, skin_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id = excluded.customer_id, service_at = excluded.service_at, service_type = excluded.service_type, note = excluded.note, care_at = excluded.care_at, operation_color = CASE WHEN ? = 1 THEN excluded.operation_color ELSE service_records.operation_color END, skin_type = CASE WHEN ? = 1 THEN excluded.skin_type ELSE service_records.skin_type END, updated_at = excluded.updated_at")
+        .bind(serviceId, asText(body.customerId), serviceAt, asText(body.serviceType), asText(body.note), asText(body.careAt) || null, asText(body.operationColor), skinType, stamp, stamp, hasOperationColor ? 1 : 0, hasSkinType ? 1 : 0).run();
       return json({ ok: true, id: serviceId });
     }
 

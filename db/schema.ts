@@ -39,6 +39,8 @@ export const serviceRecords = sqliteTable("service_records", {
   serviceType: text("service_type").notNull(),
   note: text("note").notNull().default(""),
   careAt: text("care_at"),
+  operationColor: text("operation_color").notNull().default(""),
+  skinType: text("skin_type").notNull().default(""),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });

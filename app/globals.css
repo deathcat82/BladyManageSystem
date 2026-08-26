@@ -115,15 +115,15 @@ textarea { min-height:90px; resize:vertical; line-height:1.6; }
 .appointment-mark,.care-mark { width:7px; height:7px; border-radius:50%; background:var(--rose); }
 .care-mark { background:var(--green); transform:rotate(45deg); border-radius:1px; }
 @media (max-width:760px) { .profile-grid { grid-template-columns:1fr; } .calendar-head { align-items:stretch; flex-wrap:wrap; } .day-cell { min-height:48px; } }
-.customer-edit-inline { grid-column:2; grid-row:1; align-self:start; z-index:2; }
-.details-stack:has(+ .customer-edit-inline) { visibility:hidden; }
+.customer-edit-inline { align-self:start; }
+.details-stack:has(+ .customer-edit-inline) { visibility:visible; }
 .profile-grid { grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
 .profile-grid div { padding:8px 9px; }
 .profile-grid dt { font-size:10px; }
 .profile-grid dd { margin-top:3px; font-size:13px; }
 .service-detail label { display:grid; gap:5px; margin:10px 0; font-size:12px; }
 .service-detail textarea { min-height:65px; }
-@media (max-width:900px) { .customer-edit-inline { grid-column:auto; grid-row:auto; } .details-stack:has(+ .customer-edit-inline) { display:none; } }
+@media (max-width:900px) { .customer-edit-inline { grid-column:auto; grid-row:auto; } }
 .validation-summary { margin: 16px 0; padding: 14px 18px; border-left: 4px solid #bd5150; background: #fff3f2; color: #963d3c; }
 .validation-summary ul { margin: 7px 0 0; padding-left: 20px; }
 .other-field { display: grid; gap: 6px; margin-top: 12px; }
@@ -150,3 +150,5 @@ textarea { min-height:90px; resize:vertical; line-height:1.6; }
 .big-check { align-items: flex-start; }
 .big-check input { margin-top: 3px; }
 .contract-block, .consent-choice { overflow: hidden; }
+
+.age-hint { min-height: 1em; color: var(--rose-dark); font-size: 12px; font-weight: 700; }
