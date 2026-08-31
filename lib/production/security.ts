@@ -97,11 +97,14 @@ export async function jsonBody<T>(request: Request): Promise<T> {
 
 export function securityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
-  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data:; script-src 'self' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline';");
+  const nonce = crypto.randomUUID().replaceAll("-", "");
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data:; script-src 'self' 'nonce-" + nonce + "' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline';");
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
   headers.set("Cache-Control", "no-store, private");
   headers.set("X-Content-Type-Options", "nosniff");
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  const secured = new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  if (!headers.get("content-type")?.includes("text/html")) return secured;
+  return new HTMLRewriter().on("script", { element(element) { if (!element.getAttribute("src")) element.setAttribute("nonce", nonce); } }).transform(secured);
 }
