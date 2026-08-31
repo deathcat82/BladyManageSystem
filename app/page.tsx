@@ -1,2 +1,1 @@
-import Link from "next/link";
-export default function Home(){return <main className="landing-shell"><section className="landing-card"><p className="eyebrow">LULU STUDIO · 正式營運版</p><h1>Lulu Studio<br/>紋繡美學</h1><p className="landing-copy">本網站提供工作室資訊與經營者專用管理服務。填寫同意書請使用工作室傳送給您的專屬一次性連結。</p><div className="landing-trust"><span>個資安全保存</span><span>一次性表單</span><span>Cloudflare Access 保護</span></div><div className="landing-actions"><Link className="button secondary" href="/privacy">個資與隱私告知</Link></div></section></main>}
+export { default } from "./lulu-demo";

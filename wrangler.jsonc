@@ -6,5 +6,6 @@
   "main": "./worker/index.ts",
   "workers_dev": true,
   "preview_urls": false,
-  "d1_databases": [{ "binding": "DB", "database_name": "lulu-studio-demo-db", "database_id": "800d7d34-39f7-48ee-9567-c76948f8bb06", "migrations_dir": "./drizzle" }]
+  "d1_databases": [{ "binding": "DB", "database_name": "lulu-studio-demo-db", "database_id": "800d7d34-39f7-48ee-9567-c76948f8bb06", "migrations_dir": "./drizzle" }],
+  "r2_buckets": [{ "binding": "SERVICE_PHOTOS", "bucket_name": "blady-brow-demo-service-photos" }]
 }
