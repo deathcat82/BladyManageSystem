@@ -32,12 +32,14 @@ test("正式資料庫 migration 是空白資料庫，包含外鍵、唯一電話
 });
 
 test("正式版安全實作會驗證 Access JWT、CSRF、Turnstile 與一次性表單原子鎖定", async () => {
-  const [security, publicRoute, repository, worker, config] = await Promise.all([
+  const [security, publicRoute, repository, worker, config, home, productionHome] = await Promise.all([
     readFile(new URL("../lib/production/security.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/public/form/[token]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/production/repository.ts", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../wrangler.production.jsonc.example", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/production-home.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(security, /Cf-Access-Jwt-Assertion/);
   assert.match(security, /RSASSA-PKCS1-v1_5/);
@@ -48,4 +50,20 @@ test("正式版安全實作會驗證 Access JWT、CSRF、Turnstile 與一次性�
   assert.match(worker, /weeklyBackup/);
   assert.match(config, /migrations_dir": "\.\/drizzle-production"/);
   assert.match(config, /r2_buckets/);
+  assert.match(home, /APP_ORIGIN/);
+  assert.match(productionHome, /href="\/admin"/);
+  assert.doesNotMatch(productionHome, /type="password"|DEMO ACCESS|進入 Demo/);
+  assert.match(worker, /legacyDemoRoute/);
+  assert.match(worker, /\/api\/studio/);
+  assert.match(worker, /\/api\/intake/);
+});
+
+test("正式版建置不透過 shell 執行 npm，CSRF Cookie 僅供瀏覽器自動傳送", async () => {
+  const [buildScript, bootstrap] = await Promise.all([
+    readFile(new URL("../scripts/build-production.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/admin/bootstrap/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(buildScript, /npm-cli\.js/);
+  assert.doesNotMatch(buildScript, /shell\s*:/);
+  assert.match(bootstrap, /HttpOnly; SameSite=Strict/);
 });

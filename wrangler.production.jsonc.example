@@ -6,7 +6,7 @@
   "main": "./worker/index.ts",
   "workers_dev": true,
   "preview_urls": true,
-  "triggers": { "crons": ["0 18 * * 0"] },
+  "triggers": { "crons": ["0 18 * * 7"] },
   "d1_databases": [{ "binding": "DB", "database_name": "REPLACE_WITH_NEW_D1_NAME", "database_id": "REPLACE_WITH_NEW_D1_ID", "migrations_dir": "./drizzle-production" }],
   "r2_buckets": [{ "binding": "SIGNATURES", "bucket_name": "REPLACE_WITH_PRIVATE_R2_BUCKET" }],
   "vars": {

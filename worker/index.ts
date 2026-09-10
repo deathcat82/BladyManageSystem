@@ -21,6 +21,16 @@ interface ScheduledController { cron: string; scheduledTime: number; noRetry(): 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const formalEnvironment = Boolean(env.APP_ORIGIN);
+    const legacyDemoRoute = url.pathname === "/demo"
+      || url.pathname.startsWith("/demo/")
+      || url.pathname === "/api/studio"
+      || url.pathname.startsWith("/api/studio/")
+      || url.pathname === "/api/intake"
+      || url.pathname.startsWith("/api/intake/");
+    if (formalEnvironment && legacyDemoRoute) {
+      return securityHeaders(Response.json({ error: "找不到此頁面" }, { status: 404 }));
+    }
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return securityHeaders(await handleImageOptimization(request, {

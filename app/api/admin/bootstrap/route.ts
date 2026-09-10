@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     ]);
     const csrf = csrfToken();
     const response = json({ actor, csrf, customers: customers.results, appointments: appointments.results, services: services.results, settings: Object.fromEntries((settings.results || []).map((row) => [row.key, row.value])), formLinks: consentLinks.results });
-    response.headers.append("Set-Cookie", `lulu_csrf=${csrf}; Path=/; Secure; SameSite=Strict; Max-Age=28800`);
+    response.headers.append("Set-Cookie", `lulu_csrf=${csrf}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=28800`);
     return response;
   } catch (error) { return errorResponse(error); }
 }
