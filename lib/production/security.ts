@@ -3,6 +3,7 @@ import { MAX_PUBLIC_PAYLOAD_BYTES } from "./constants";
 export type ProductionEnv = {
   DB: D1Database;
   SIGNATURES: R2Bucket;
+  SERVICE_PHOTOS: R2Bucket;
   OWNER_EMAILS: string;
   DEVELOPER_EMAILS: string;
   ACCESS_TEAM_DOMAIN: string;
@@ -17,7 +18,7 @@ export type ProductionEnv = {
 type AccessClaims = { email?: string; aud?: string | string[]; exp?: number; nbf?: number; iss?: string };
 type AccessRole = "owner" | "developer";
 
-function b64urlToBytes(value: string): Uint8Array {
+function b64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
   const binary = atob(base64);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -31,13 +32,14 @@ function safeEmails(value: string): Set<string> {
   return new Set(value.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
 }
 
-let certificateCache: { until: number; keys: JsonWebKey[] } | undefined;
+type AccessJwk = JsonWebKey & { kid?: string };
+let certificateCache: { until: number; keys: AccessJwk[] } | undefined;
 
-async function accessCertificates(teamDomain: string): Promise<JsonWebKey[]> {
+async function accessCertificates(teamDomain: string): Promise<AccessJwk[]> {
   if (certificateCache && certificateCache.until > Date.now()) return certificateCache.keys;
   const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`, { headers: { accept: "application/json" } });
   if (!response.ok) throw new Error("無法取得 Access 驗證憑證");
-  const data = await response.json() as { keys?: JsonWebKey[] };
+  const data = await response.json() as { keys?: AccessJwk[] };
   if (!data.keys?.length) throw new Error("Access 驗證憑證格式錯誤");
   certificateCache = { keys: data.keys, until: Date.now() + 60 * 60 * 1000 };
   return data.keys;
@@ -98,7 +100,7 @@ export async function jsonBody<T>(request: Request): Promise<T> {
 export function securityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   const nonce = crypto.randomUUID().replaceAll("-", "");
-  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; object-src 'none'; img-src 'self' data:; script-src 'self' 'nonce-" + nonce + "' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline';");
+  headers.set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; frame-src https://challenges.cloudflare.com; form-action 'self'; object-src 'none'; img-src 'self' data:; script-src 'self' 'nonce-" + nonce + "' https://challenges.cloudflare.com; connect-src 'self' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline';");
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   headers.set("Referrer-Policy", "no-referrer");
   headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");

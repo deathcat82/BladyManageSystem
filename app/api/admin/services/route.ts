@@ -4,7 +4,7 @@ import { saveService } from "@/lib/production/repository";
 import { jsonBody, requireAdminWrite, verifyAccess } from "@/lib/production/security";
 
 type Payload = { id?: string; customerId?: string; serviceAt?: string; serviceType?: string; operationColor?: string; skinType?: string; note?: string; careAt?: string | null };
-const skinTypes = new Set(["", "油肌乾肌", "敏乾肌", "混合肌", "其他"]);
+const skinTypes = new Set(["", "油肌", "乾肌", "油肌乾肌", "敏乾肌", "混合肌", "其他"]);
 export async function POST(request: Request) {
   try {
     const env = productionEnv(); const actor = await verifyAccess(request, env, "owner"); requireAdminWrite(request, env);

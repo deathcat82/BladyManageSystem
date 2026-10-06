@@ -14,7 +14,7 @@
 
 ## 登入與角色
 
-管理端由 Cloudflare Access 保護，系統**不保存固定密碼**。已授權的 Email 會收到單次驗證碼；Email 密碼不會輸入或保存於本站。
+管理端由 Cloudflare Access 保護，系統**不保存固定密碼**。登入方式依 Cloudflare Access 的身分提供者設定；本輪實際驗證使用 Cloudflare 帳號登入。本站不收集 Email 密碼。
 
 - 經營者：可使用 /admin 管理客戶、預約、服務與同意書。
 - 開發者：可使用 /developer 管理工作室設定、備份與稽核。
@@ -35,7 +35,7 @@
 
 ## 日常操作
 
-1. 以經營者 Email 開啟正式 /admin，輸入 Cloudflare 寄出的單次驗證碼。
+1. 以已授權帳號開啟正式 /admin，依 Cloudflare Access 畫面完成登入。
 2. 建立一次性同意書網址，傳送給客戶填寫。
 3. 由客戶庫新增或維護客戶、服務與保養關心。
 4. 每月由開發者端建立一次備份，並從私有 R2 下載保存至工作室 PC。
@@ -48,8 +48,11 @@
 依序執行：
 
 1. npm test
-2. npm run build:production
-3. npx wrangler deploy --config dist/server/wrangler.json
+2. npm run typecheck
+3. npm run lint
+4. npm run build:production
+5. 先保存正式備份、驗證 staging 並套用正式 migration；詳見 [發布流程](docs/production-release.md)。
+6. npx wrangler deploy --config dist/server/wrangler.json
 
 部署後至少確認首頁回應 200、/admin 未登入時導向 Cloudflare Access、/api/studio 與 /api/intake/test-token 回應 404。
 

@@ -10,8 +10,8 @@ export async function GET(request: Request) {
     const env = productionEnv();
     await verifyAccess(request, env, "owner");
     const keyword = new URL(request.url).searchParams.get("q")?.trim() || "";
-    const rows = await env.DB.prepare("SELECT id, full_name, phone, line_id, birthday, referral_source, note, marketing_consent, reminder_consent, archived_at, deletion_review_at, updated_at FROM customers WHERE full_name LIKE ? OR phone LIKE ? OR line_id LIKE ? ORDER BY archived_at IS NOT NULL, updated_at DESC LIMIT 200")
-      .bind(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`).all();
+    const rows = await env.DB.prepare("SELECT id, full_name, phone, line_id, birthday, referral_source, note, marketing_consent, reminder_consent, archived_at, deletion_review_at, updated_at FROM customers WHERE full_name LIKE ? OR phone LIKE ? OR line_id LIKE ? OR birthday LIKE ? ORDER BY archived_at IS NOT NULL, updated_at DESC LIMIT 200")
+      .bind(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`, `%${keyword}%`).all();
     return json({ customers: rows.results });
   } catch (error) { return errorResponse(error); }
 }
@@ -26,6 +26,10 @@ export async function POST(request: Request) {
     if (body.action === "create" || body.action === "update") {
       const customer = { fullName: requireString(body.fullName, "姓名"), phone: requireString(body.phone, "電話"), lineId: body.lineId || "", lineUserId: body.lineUserId || "", birthday: requireString(body.birthday, "生日"), referralSource: body.referralSource || "", note: body.note || "", marketingConsent: body.marketingConsent === true, reminderConsent: body.reminderConsent === true };
       if (body.action === "create") return json({ ok: true, id: await createCustomer(env, customer, actor.email) });
+      if (body.lineUserId === undefined) {
+        const previous = await env.DB.prepare("SELECT line_user_id FROM customers WHERE id=?").bind(requireString(body.id, "客戶編號")).first<{line_user_id:string}>();
+        customer.lineUserId = previous?.line_user_id || "";
+      }
       await updateCustomer(env, requireString(body.id, "客戶編號"), customer, actor.email);
       return json({ ok: true });
     }
@@ -33,8 +37,11 @@ export async function POST(request: Request) {
       const customerId = requireString(body.id, "客戶編號");
       if (body.confirmation !== "永久刪除") throw new Response("請輸入「永久刪除」確認操作", { status: 422 });
       const signatures = await env.DB.prepare("SELECT signature_object_key FROM consent_submissions WHERE customer_id=?").bind(customerId).all<{ signature_object_key: string }>();
+      const photos = await env.DB.prepare("SELECT object_key FROM service_photos WHERE customer_id=?").bind(customerId).all<{ object_key:string }>();
       await Promise.all((signatures.results || []).map((row) => env.SIGNATURES.delete(row.signature_object_key)));
+      await Promise.all((photos.results || []).map((row) => env.SERVICE_PHOTOS.delete(row.object_key)));
       await env.DB.batch([
+        env.DB.prepare("DELETE FROM service_photos WHERE customer_id=?").bind(customerId),
         env.DB.prepare("DELETE FROM notification_outbox WHERE customer_id=?").bind(customerId),
         env.DB.prepare("DELETE FROM notification_preferences WHERE customer_id=?").bind(customerId),
         env.DB.prepare("DELETE FROM consent_submissions WHERE customer_id=?").bind(customerId),

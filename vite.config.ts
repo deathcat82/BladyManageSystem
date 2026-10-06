@@ -11,6 +11,6 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
   return {
     server: isCodexSeatbeltSandbox ? { watch: { useFsEvents: false, usePolling: true } } : undefined,
-    plugins: [vinext(), sites(), cloudflare({ viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] } })],
+    plugins: [vinext(), sites(), cloudflare({ configPath: process.env.WRANGLER_TARGET_CONFIG || "wrangler.jsonc", viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] } })],
   };
 });

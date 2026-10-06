@@ -27,6 +27,10 @@ h3 { margin:18px 0 10px; font-size:18px; }
 .login-help { margin:12px 0 0; color:var(--muted); font-size:13px; line-height:1.6; }
 .landing-footer { max-width:900px; margin:24px 0 0; font-size:13px; }
 .landing-footer a { color:var(--rose-dark); }
+.consent-snapshot { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; line-height:1.7; }
+.consent-signature { max-width:100%; max-height:240px; background:white; }
+.app-shell header nav { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.brand { text-decoration:none; }
 .how-grid { display:grid; max-width:900px; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:36px; }
 .how-grid article { min-height:170px; padding:22px; border:1px solid var(--line); background:rgba(255,253,249,.65); }
 .how-grid b { color:var(--rose); font-size:12px; letter-spacing:.1em; }

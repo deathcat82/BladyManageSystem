@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { getD1 } from "../../../db";
 import { csrfToken, type ProductionEnv, verifyAccess } from "@/lib/production/security";
+import { writeAudit } from "@/lib/production/repository";
 
 type Body = Record<string, unknown>;
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -28,7 +29,7 @@ function requireWrite(request: Request): void {
 }
 function json(value: unknown, status = 200, csrf?: string): Response {
   const headers = new Headers({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store, private" });
-  if (csrf) headers.append("Set-Cookie", "photo_csrf=" + csrf + "; Path=/; Secure; SameSite=Strict; Max-Age=1800");
+  if (csrf) headers.append("Set-Cookie", "photo_csrf=" + csrf + "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=1800");
   return new Response(JSON.stringify(value), { status, headers });
 }
 
@@ -38,7 +39,8 @@ export async function GET(request: Request) {
     const serviceId = new URL(request.url).searchParams.get("serviceId")?.trim();
     if (!serviceId) return json({ error: "缺少服務紀錄。" }, 400);
     const rows = await getD1().prepare("SELECT id, service_record_id, stage, content_type, original_name, byte_size, created_at FROM service_photos WHERE service_record_id=? ORDER BY created_at DESC").bind(serviceId).all();
-    const csrf = csrfToken();
+    const existingCsrf = cookie(request, "photo_csrf");
+    const csrf = existingCsrf && /^[a-f0-9]{32}$/.test(existingCsrf) ? existingCsrf : csrfToken();
     return json({ photos: rows.results || [], csrf }, 200, csrf);
   } catch (error) {
     return json({ error: error instanceof Response ? await error.text() : "無法讀取服務照片。" }, error instanceof Response ? error.status : 500);
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await verifyAccess(request, photoEnv(), "owner");
+    const actor = await verifyAccess(request, photoEnv(), "owner");
     requireWrite(request);
     const body = await request.json<Body>();
     const action = text(body.action);
@@ -59,6 +61,7 @@ export async function POST(request: Request) {
       const matched = dataUrl.exec(text(body.dataUrl));
       if (!serviceId || !stages.has(stage)) return json({ error: "請選擇服務紀錄與照片分類。" }, 400);
       if (!matched) return json({ error: "照片僅支援 JPG、PNG 或 WebP。" }, 400);
+      if (matched[2].length > Math.ceil(MAX_PHOTO_BYTES / 3) * 4) return json({ error: "照片不可超過 4 MiB。" }, 413);
       const service = await db.prepare("SELECT id, customer_id FROM service_records WHERE id=?").bind(serviceId).first<{ id: string; customer_id: string }>();
       if (!service) return json({ error: "找不到服務紀錄。" }, 404);
       const payload = bytes(matched[2]);
@@ -75,6 +78,7 @@ export async function POST(request: Request) {
         await bucket().delete(objectKey);
         throw error;
       }
+      if (photoEnv().APP_ORIGIN) await writeAudit(db, actor.email, "upload", "service_photo", photoId, [stage]);
       return json({ ok: true, id: photoId });
     }
 
@@ -84,6 +88,7 @@ export async function POST(request: Request) {
       if (!photo) return json({ error: "找不到服務照片。" }, 404);
       await bucket().delete(photo.object_key);
       await db.prepare("DELETE FROM service_photos WHERE id=?").bind(photoId).run();
+      if (photoEnv().APP_ORIGIN) await writeAudit(db, actor.email, "delete", "service_photo", photoId, ["服務照片"]);
       return json({ ok: true });
     }
 

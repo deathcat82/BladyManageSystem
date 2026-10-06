@@ -4,7 +4,7 @@ import type { ProductionEnv } from "./security";
 
 type CustomerInput = { fullName: string; phone: string; lineId?: string; lineUserId?: string; birthday: string; referralSource?: string; note?: string; marketingConsent?: boolean; reminderConsent?: boolean };
 type ServiceInput = { id?: string; customerId: string; serviceAt: string; serviceType: string; operationColor?: string; skinType?: string; note?: string; careAt?: string | null };
-type AppointmentInput = { id?: string; customerId: string; serviceType: string; startsAt: string; durationMinutes?: number; status?: string; note?: string };
+type AppointmentInput = { id?: string; customerId: string; serviceType: string; startsAt: string; durationMinutes?: number; status?: string; depositStatus?: string; depositAmount?: number | null; note?: string };
 
 export const id = () => crypto.randomUUID();
 
@@ -63,8 +63,8 @@ export async function saveAppointment(env: ProductionEnv, input: AppointmentInpu
   await ensureCustomerExists(env.DB, input.customerId);
   const appointmentId = input.id || id();
   const now = taipeiNow();
-  await env.DB.prepare("INSERT INTO appointments (id, customer_id, service_type, starts_at, duration_minutes, status, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id=excluded.customer_id, service_type=excluded.service_type, starts_at=excluded.starts_at, duration_minutes=excluded.duration_minutes, status=excluded.status, note=excluded.note, updated_at=excluded.updated_at")
-    .bind(appointmentId, input.customerId, input.serviceType, input.startsAt, input.durationMinutes || 120, input.status || "scheduled", input.note || "", actor, now, now).run();
+  await env.DB.prepare("INSERT INTO appointments (id, customer_id, service_type, starts_at, duration_minutes, status, deposit_status, deposit_amount, note, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET customer_id=excluded.customer_id, service_type=excluded.service_type, starts_at=excluded.starts_at, duration_minutes=excluded.duration_minutes, status=excluded.status, deposit_status=excluded.deposit_status, deposit_amount=excluded.deposit_amount, note=excluded.note, updated_at=excluded.updated_at")
+    .bind(appointmentId, input.customerId, input.serviceType, input.startsAt, input.durationMinutes || 120, input.status || "scheduled", input.depositStatus || "unpaid", input.depositStatus === "paid" ? input.depositAmount ?? null : null, input.note || "", actor, now, now).run();
   await writeAudit(env.DB, actor, input.id ? "update" : "create", "appointment", appointmentId, ["預約"]);
 }
 
@@ -85,7 +85,7 @@ export async function registerPublicAttempt(env: ProductionEnv, tokenHash: strin
   return { id: link.id, expiresAt: link.expires_at };
 }export async function claimPublicLink(env: ProductionEnv, tokenHash: string): Promise<{ id: string }> {
   const now = taipeiNow();
-  const result = await env.DB.prepare("UPDATE form_links SET status='submitting', attempt_count=attempt_count+1 WHERE token_hash=? AND status='active' AND expires_at>? AND attempt_count<?")
+  const result = await env.DB.prepare("UPDATE form_links SET status='submitting', attempt_count=attempt_count+1 WHERE token_hash=? AND status='active' AND julianday(expires_at)>julianday(?) AND attempt_count<?")
     .bind(tokenHash, now, FORM_MAX_ATTEMPTS).run();
   if (!result.meta.changes) {
     const link = await env.DB.prepare("SELECT status, attempt_count FROM form_links WHERE token_hash=?").bind(tokenHash).first<{ status: string; attempt_count: number }>();

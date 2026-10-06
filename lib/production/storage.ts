@@ -1,7 +1,7 @@
 import { MAX_SIGNATURE_BYTES } from "./constants";
 import type { ProductionEnv } from "./security";
 
-function base64ToBytes(value: string): Uint8Array {
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
   const binary = atob(value);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
@@ -12,7 +12,7 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function sha256(bytes: Uint8Array): Promise<string> {
+async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -45,7 +45,7 @@ export async function putSignature(env: ProductionEnv, consentId: string, dataUr
 }
 
 export async function weeklyBackup(env: ProductionEnv): Promise<{ objectKey: string; sha256: string }> {
-  const tables = ["customers", "appointments", "service_records", "form_links", "consent_submissions", "notification_preferences", "notification_outbox", "audit_logs", "app_settings"];
+  const tables = ["customers", "appointments", "service_records", "service_photos", "form_links", "consent_submissions", "notification_preferences", "notification_outbox", "audit_logs", "app_settings"];
   const backup: Record<string, unknown> = { version: 1, createdAt: new Date().toISOString(), tables: {} };
   for (const table of tables) {
     const rows = await env.DB.prepare(`SELECT * FROM ${table}`).all();

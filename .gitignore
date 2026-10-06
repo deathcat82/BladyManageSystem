@@ -50,3 +50,4 @@ next-env.d.ts
 # ���� Cloudflare �b���������]�w�]�ѽd���ƻs�A������^
 /wrangler.production.jsonc
 /wrangler.staging.jsonc
+/worker-configuration.d.ts

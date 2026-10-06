@@ -63,7 +63,7 @@ test("正式版建置不透過 shell 執行 npm，CSRF Cookie 僅供瀏覽器自
     readFile(new URL("../scripts/build-production.mjs", import.meta.url), "utf8"),
     readFile(new URL("../app/api/admin/bootstrap/route.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(buildScript, /npm-cli\.js/);
+  assert.match(buildScript, /vinext\/dist\/cli\.js/);
   assert.doesNotMatch(buildScript, /shell\s*:/);
   assert.match(bootstrap, /HttpOnly; SameSite=Strict/);
 });
