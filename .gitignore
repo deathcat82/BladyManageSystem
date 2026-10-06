@@ -46,3 +46,8 @@ next-env.d.ts
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# ���� Cloudflare �b���������]�w�]�ѽd���ƻs�A������^
+/wrangler.production.jsonc
+/wrangler.staging.jsonc
+/worker-configuration.d.ts

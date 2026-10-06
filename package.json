@@ -8,12 +8,16 @@
   "scripts": {
     "dev": "vinext dev",
     "build": "vinext build",
-    "build:workers-demo": "vinext build",
+    "build:workers-demo": "vinext build && node scripts/sync-worker-bindings.mjs",
     "deploy:workers-demo": "npm run build:workers-demo && wrangler deploy --config dist/server/wrangler.json",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
-    "lint": "eslint app db tests worker drizzle.config.ts vite.config.ts --ignore-pattern dist --ignore-pattern build",
-    "db:generate": "drizzle-kit generate"
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "lint": "eslint app db lib tests worker scripts drizzle.config.ts drizzle.production.config.ts vite.config.ts --ignore-pattern dist --ignore-pattern build",
+    "db:generate": "drizzle-kit generate",
+    "db:generate:production": "drizzle-kit generate --config drizzle.production.config.ts",
+    "build:production": "node scripts/build-production.mjs",
+    "deploy:production": "npm run build:production && wrangler deploy --config dist/server/wrangler.json",
+    "typecheck": "wrangler types worker-configuration.d.ts && tsc --noEmit --incremental false"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",

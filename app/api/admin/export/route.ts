@@ -1,0 +1,6 @@
+import { productionEnv } from "@/lib/production/bindings";
+import { ageOn } from "@/lib/production/validation";
+import { verifyAccess } from "@/lib/production/security";
+import { errorResponse } from "@/lib/production/http";
+const esc=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
+export async function GET(request:Request){try{const env=productionEnv();await verifyAccess(request,env,"owner");const rows=await env.DB.prepare("SELECT full_name,phone,line_id,line_user_id,birthday,referral_source,note,archived_at,created_at FROM customers ORDER BY created_at DESC").all<Record<string,unknown>>();const headers=["姓名","電話","LINE ID","LINE User ID","生日","年齡（匯出時）","得知管道","一般備註","封存時間","建立時間"];const csv=[headers.map(esc).join(","),...(rows.results||[]).map((row)=>[row.full_name,row.phone,row.line_id,row.line_user_id,row.birthday,ageOn(String(row.birthday))??"",row.referral_source,row.note,row.archived_at,row.created_at].map(esc).join(","))].join("\r\n");return new Response(`\uFEFF${csv}`,{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":"attachment; filename=customers-safe.csv","cache-control":"no-store"}});}catch(error){return errorResponse(error);}}

@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function Privacy(){return <main className="public-shell"><article className="public-card"><p className="eyebrow">LULU STUDIO</p><h1>個資與隱私告知</h1><p className="notice">正式上線前，請由工作室於開發者設定頁填入已核准的聯絡窗口與正式隱私告知內容。</p><h2>資料使用原則</h2><p className="landing-copy">客戶資料僅用於預約、服務紀錄、同意書保存及經客戶同意的生日優惠或保養提醒。一般客戶匯出檔不包含健康揭露與簽名資料。</p><p className="landing-copy">健康資料、同意書快照與簽名僅供具授權的工作室人員調閱；簽名以私有物件儲存，不提供公開網址。</p><Link className="button secondary" href="/">回到首頁</Link></article></main>}
