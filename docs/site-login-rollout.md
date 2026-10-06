@@ -2,7 +2,11 @@
 
 目前程式已實作，staging 已備份並套用 `0002_site_auth.sql`、初始化兩個預設帳號。2026-10-06 已設定 staging 與正式 Gmail Secret，發布 staging 版本 `5f8a59a6-7d38-433f-9dbf-820140f43097`，以開發者帳號的臨時密碼實測：Gmail SMTP 接受寄信，頁面進入驗證碼步驟。信箱實際收信與首次改密碼需由本人完成，尚未標示驗收通過。
 
-正式 D1 備份、Worker 版本／設定、R2 清單及 Dashboard 的 Access 設定已保存於忽略的 outputs 目錄。正式站尚未套用 auth migration 或發布新登入程式；正式及 staging Access 保護仍保留，等本人驗證後再切換。
+2026-10-06 依使用者後續明確要求，已重新備份正式 D1、套用 `0002_site_auth.sql`、初始化正式帳號並發布 Worker `034b8af2-aae4-4675-b65b-afb68b1de96c`。正式 `/admin` 與 `/developer` 未登入時導向 `/login`，匿名管理／開發者／照片／同意書調閱 API 均回傳 401；缺少 CSRF 的登入寫入回傳 403。正式開發者帳號的臨時密碼通過驗證，Gmail SMTP 接受寄信，頁面已進入驗證碼步驟。本人收信、輸入驗證碼、改密碼及登入後操作尚待本人完成；不宣告這些項目已驗收。
+
+正式 D1 備份、Worker 版本／設定、R2 清單及 Dashboard 的 Access 設定已保存於忽略的 outputs 目錄。正式 Access 應用保留原 ID 與共用政策，名稱改為「Lulu Studio 舊 Access（站內登入已取代）」，五個目的地路徑加上 `__retired-cloudflare-access/` 前綴，已不攔截實際管理路徑。staging Access 應用與共用 Email 政策未修改。
+
+發布後八類既有營運資料數量與發布前 D1 備份一致，外鍵檢查通過；兩個預設帳號角色正確。23 項測試、TypeScript、ESLint 與正式建置通過，14 項正式匿名 HTTP 安全檢查通過。
 
 ## 使用方式
 
@@ -33,7 +37,7 @@
 5. 通過正式設定检查後發布，保留正式 Access，先由 developer 驗證站內登入。成功後移除正式應用的管理／開發者／私有 API 路徑保護；不要刪除與 staging 共用的 Email 政策，也不要公開 R2。
 6. 驗證匿名 `/admin` 導向 `/login`、私有 API 回傳 401、登入後功能正常；保留公開同意書、既有 Demo 及正式資料。客戶本人完成 owner 首次收信及改密碼後，才可把該項標示通過。
 
-若切換異常，先恢復正式 Access 保護，再回復舊 Worker。保留新增 auth 資料表，不倒退資料庫。SMTP 應用程式密碼若被 Google 撤銷，新登入暫停；已有效的站內 session 仍按原 72 小時到期，可在 Gmail 設定更新後恢復寄信。
+若切換異常，先將正式 Access 應用五個路徑移除 `__retired-cloudflare-access/` 前綴，恢复原本 admin*、developer*、api/admin*、api/developer*、api/service-photos* 的保護，再回復舊 Worker。保留新增 auth 資料表，不倒退資料庫。SMTP 應用程式密碼若被 Google 撤銷，新登入暫停；已有效的站內 session 仍按原 72 小時到期，可在 Gmail 設定更新後恢復寄信。
 
 ## API
 
