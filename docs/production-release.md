@@ -38,7 +38,7 @@ node node_modules/wrangler/bin/wrangler.js rollback e9b1d27a-a285-4417-9c05-c74d
 - 14 項自動測試通過，包含舊資料升級／外鍵、訂金、角色與 CSRF、照片權限／大小／格式、加密與原子保存、失敗重試、同時提交、撤銷／過期及備份。
 - TypeScript 與 ESLint 通過；正式及 staging 建置成功。
 - staging 實際登入成功，客戶新增／修改、生日搜尋、封存／恢復、服務與油肌選項、保養關心待辦、術前術後照片上傳／比較／預覽、訂金 NT$1,000、跨月 11/01 00:15、重新整理後保存、一次性網址已驗證。
-- 手機 390px 表單無水平溢出，霧唇條件欄位正確；真實 Turnstile 已完成；測試同意書最終送出仍等待操作確認。
-- 正式 D1 升級前匯出已保存；R2 清單 4 筆及先前 Worker deployment 資訊已保存。正式 migration 與新版發布仍待完整 staging 驗收。
+- 手機 390px 表單無水平溢出，霧唇條件欄位正確；真實 Turnstile 已完成；測試同意書已成功送出，重整網址失效，歷史合約文字、版本與簽名調閱正常。
+- 正式 D1 升級前匯出已保存；R2 清單 4 筆及先前 Worker deployment 資訊已保存。正式 migration 與新版發布準備中。
 
-實際 Cloudflare 登入目前提供 Cloudflare 帳號登入，本輪開發者登入未要求 Email OTP；經營者帳號的實際登入仍須完成驗收，不能以角色單元測試代替。
+實際 Cloudflare 登入提供 Cloudflare 帳號登入，本輪已授權帳號登入未要求 Email OTP。隔離 staging 暫時將已登入的測試帳號限制為經營者，實測 /developer 顯示「此帳號沒有開發者權限」，完成後已恢復 staging 原角色設定；未變更正式角色與 Access 名單。工作室經營者 jl89bb020@gmail.com 的首次個別登入仍建議由本人確認。
