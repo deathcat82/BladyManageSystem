@@ -16,7 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:generate:production": "drizzle-kit generate --config drizzle.production.config.ts",
     "build:production": "node scripts/build-production.mjs",
-    "deploy:production": "npm run build:production && wrangler deploy --config dist/server/wrangler.json",
+    "deploy:production": "node scripts/deploy-production.mjs",
     "typecheck": "wrangler types worker-configuration.d.ts && tsc --noEmit --incremental false"
   },
   "dependencies": {

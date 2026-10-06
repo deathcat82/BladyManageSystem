@@ -14,18 +14,18 @@
 
 ## 登入與角色
 
-管理端由 Cloudflare Access 保護，系統**不保存固定密碼**。登入方式依 Cloudflare Access 的身分提供者設定；本輪實際驗證使用 Cloudflare 帳號登入。本站不收集 Email 密碼。
+管理端使用站內 Email＋密碼登入，再以寄至該信箱的驗證碼確認身分。密碼只保存獨立 salt 的 scrypt 雜湊；成功登入後，同一瀏覽器固定保持 72 小時。首次使用臨時密碼時，須通過驗證碼並更換新密碼才能進入管理端。
 
 - 經營者：可使用 /admin 管理客戶、預約、服務與同意書。
 - 開發者：可使用 /developer 管理工作室設定、備份與稽核。
-- 新增經營者時，必須同時更新 Cloudflare Access 的 Email allowlist 與 Worker 的 OWNER_EMAILS Secret。
-- 新增開發者時，另更新 DEVELOPER_EMAILS Secret；開發者自動擁有經營者權限。
+- 帳號與角色由正式 D1 的 auth_accounts 管理，沒有公開註冊入口。
+- 預設 jl89bb020@gmail.com 為經營者；jerry.master.claw@gmail.com 為開發者，包含經營者權限。
 
 目前已授權的霧眉師帳號為 jl89bb020@gmail.com，僅能進入經營者端。
 
 ## 安全與資料保存
 
-- /admin、/developer、管理 API 與服務照片 API 受 Access JWT、角色與 CSRF 保護。
+- /admin、/developer、管理 API 與服務照片 API 受站內工作階段、角色與 CSRF 保護。舊 Cloudflare Access 登入路徑已撤下，設定保留在備存路徑供回復。
 - /demo、/api/studio、舊 /api/intake/* 在正式站一律回傳 404，不能繞過正式表單與登入。
 - 公開同意書使用 Turnstile、一次性 Token、嘗試次數限制與原子鎖定。
 - 簽名 PNG 存於私有 R2；D1 只保存物件鍵、雜湊與加密同意書快照。
@@ -35,7 +35,7 @@
 
 ## 日常操作
 
-1. 以已授權帳號開啟正式 /admin，依 Cloudflare Access 畫面完成登入。
+1. 以預設帳號開啟正式 /admin，完成站內密碼與 Email 驗證碼登入。
 2. 建立一次性同意書網址，傳送給客戶填寫。
 3. 由客戶庫新增或維護客戶、服務與保養關心。
 4. 每月由開發者端建立一次備份，並從私有 R2 下載保存至工作室 PC。
@@ -51,19 +51,19 @@
 2. npm run typecheck
 3. npm run lint
 4. npm run build:production
-5. 先保存正式備份、驗證 staging 並套用正式 migration；詳見 [發布流程](docs/production-release.md)。
-6. npx wrangler deploy --config dist/server/wrangler.json
+5. 先保存正式備份、驗證 staging 並套用正式 migration；詳見 [站內登入發布流程](docs/site-login-rollout.md)。
+6. npm run deploy:production（先檢查必要 Secret 及預設帳號，再建置發布）
 
-部署後至少確認首頁回應 200、/admin 未登入時導向 Cloudflare Access、/api/studio 與 /api/intake/test-token 回應 404。
+部署後至少確認首頁回應 200、/admin 未登入時導向 /login、匿名私有 API 回應 401、/api/studio 與 /api/intake/test-token 回應 404。
 
 ## 正式營運前仍需由工作室核准
 
 - 工作室正式名稱、個資聯絡窗口。
 - 同意書與隱私告知最終文字及版本號。
-- 每位經營者首次登入的 Access 驗證碼測試。
-- 日後若採用自訂網域，需將 Access 與 Turnstile hostname 一併更新。
+- 每位帳號本人首次登入的收信、驗證碼及改密碼測試。
+- 日後若採用自訂網域，需更新 APP_ORIGIN 與 Turnstile hostname。
 
 ## Git 規則
 
 - wrangler.production.jsonc、wrangler.staging.jsonc、.dev.vars、金鑰、匯出資料與 SQLite 檔均不得提交。
-- 正式發布以中文提交訊息與 v1.0.0-production release tag 管理。
+- 正式發布以遞增的 vX.Y.Z-production release tag 管理；保留既有發布 tag。

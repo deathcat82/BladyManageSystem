@@ -45,7 +45,7 @@ export async function putSignature(env: ProductionEnv, consentId: string, dataUr
 }
 
 export async function weeklyBackup(env: ProductionEnv): Promise<{ objectKey: string; sha256: string }> {
-  const tables = ["customers", "appointments", "service_records", "service_photos", "form_links", "consent_submissions", "notification_preferences", "notification_outbox", "audit_logs", "app_settings"];
+  const tables = ["customers", "appointments", "service_records", "service_photos", "form_links", "consent_submissions", "notification_preferences", "notification_outbox", "audit_logs", "app_settings", "auth_accounts"];
   const backup: Record<string, unknown> = { version: 1, createdAt: new Date().toISOString(), tables: {} };
   for (const table of tables) {
     const rows = await env.DB.prepare(`SELECT * FROM ${table}`).all();

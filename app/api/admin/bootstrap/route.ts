@@ -13,9 +13,10 @@ export async function GET(request: Request) {
       env.DB.prepare("SELECT key, value FROM app_settings").all<{ key: string; value: string }>(),
       env.DB.prepare("SELECT id, status, expires_at, used_at, created_at FROM form_links ORDER BY created_at DESC LIMIT 50").all(),
     ]);
-    const csrf = csrfToken();
+    const existing = request.headers.get("cookie")?.split(";").map(value=>value.trim()).find(value=>value.startsWith("lulu_csrf="))?.slice(10);
+    const csrf = existing && /^[a-f0-9]{32}$/.test(existing) ? existing : csrfToken();
     const response = json({ actor, csrf, customers: customers.results, appointments: appointments.results, services: services.results, settings: Object.fromEntries((settings.results || []).map((row) => [row.key, row.value])), formLinks: consentLinks.results });
-    response.headers.append("Set-Cookie", `lulu_csrf=${csrf}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=28800`);
+    response.headers.append("Set-Cookie", `lulu_csrf=${csrf}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=259200`);
     return response;
   } catch (error) { return errorResponse(error); }
 }

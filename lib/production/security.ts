@@ -1,4 +1,5 @@
 import { MAX_PUBLIC_PAYLOAD_BYTES } from "./constants";
+import { requireSession } from "./session";
 
 export type ProductionEnv = {
   DB: D1Database;
@@ -13,63 +14,13 @@ export type ProductionEnv = {
   DATA_ENCRYPTION_KEY: string;
   BACKUP_ENCRYPTION_KEY: string;
   APP_ORIGIN: string;
+  SMTP_USER: string;
+  SMTP_APP_PASSWORD: string;
+  AUTH_HMAC_SECRET: string;
 };
 
-type AccessClaims = { email?: string; aud?: string | string[]; exp?: number; nbf?: number; iss?: string };
-type AccessRole = "owner" | "developer";
-
-function b64urlToBytes(value: string): Uint8Array<ArrayBuffer> {
-  const base64 = value.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - value.length % 4) % 4);
-  const binary = atob(base64);
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-}
-
-function parseJson<T>(value: string): T {
-  return JSON.parse(new TextDecoder().decode(b64urlToBytes(value))) as T;
-}
-
-function safeEmails(value: string): Set<string> {
-  return new Set(value.split(",").map((email) => email.trim().toLowerCase()).filter(Boolean));
-}
-
-type AccessJwk = JsonWebKey & { kid?: string };
-let certificateCache: { until: number; keys: AccessJwk[] } | undefined;
-
-async function accessCertificates(teamDomain: string): Promise<AccessJwk[]> {
-  if (certificateCache && certificateCache.until > Date.now()) return certificateCache.keys;
-  const response = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error("無法取得 Access 驗證憑證");
-  const data = await response.json() as { keys?: AccessJwk[] };
-  if (!data.keys?.length) throw new Error("Access 驗證憑證格式錯誤");
-  certificateCache = { keys: data.keys, until: Date.now() + 60 * 60 * 1000 };
-  return data.keys;
-}
-
-export async function verifyAccess(request: Request, env: ProductionEnv, required: AccessRole): Promise<{ email: string; role: AccessRole }> {
-  const token = request.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token || !env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) throw new Response("需要 Cloudflare Access 驗證", { status: 401 });
-  const [encodedHeader, encodedPayload, encodedSignature, ...extra] = token.split(".");
-  if (!encodedHeader || !encodedPayload || !encodedSignature || extra.length) throw new Response("Access Token 格式錯誤", { status: 401 });
-  let header: { alg?: string; kid?: string };
-  let claims: AccessClaims;
-  try { header = parseJson(encodedHeader); claims = parseJson(encodedPayload); } catch { throw new Response("Access Token 無法解析", { status: 401 }); }
-  if (header.alg !== "RS256" || !header.kid) throw new Response("Access Token 演算法不符", { status: 401 });
-  const key = (await accessCertificates(env.ACCESS_TEAM_DOMAIN)).find((item) => item.kid === header.kid);
-  if (!key) throw new Response("Access Token 金鑰已失效", { status: 401 });
-  const cryptoKey = await crypto.subtle.importKey("jwk", key, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-  const signature = b64urlToBytes(encodedSignature);
-  const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", cryptoKey, signature, new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`));
-  const audience = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  const now = Math.floor(Date.now() / 1000);
-  if (!valid || !claims.email || !audience.includes(env.ACCESS_AUD) || !claims.exp || claims.exp <= now || (claims.nbf && claims.nbf > now) || claims.iss !== `https://${env.ACCESS_TEAM_DOMAIN}`) {
-    throw new Response("Access Token 驗證失敗", { status: 401 });
-  }
-  const email = claims.email.toLowerCase();
-  const developer = safeEmails(env.DEVELOPER_EMAILS).has(email);
-  const owner = safeEmails(env.OWNER_EMAILS).has(email);
-  if ((required === "developer" && !developer) || (required === "owner" && !(owner || developer))) throw new Response("沒有此頁面權限", { status: 403 });
-  return { email, role: developer ? "developer" : "owner" };
-}
+/** All private production APIs use the same site session/role guard. */
+export const verifyAccess = requireSession;
 
 function cookieValue(request: Request, name: string): string | undefined {
   return request.headers.get("cookie")?.split(";").map((item) => item.trim()).find((item) => item.startsWith(`${name}=`))?.slice(name.length + 1);

@@ -5,10 +5,8 @@ import { bundled, database, bucket } from "./helpers/runtime.mjs";
 
 const env=globalThis.__cloudflareTestEnv={};
 const key=Buffer.alloc(32,19).toString("base64");
-const keyPair=await crypto.subtle.generateKey({name:"RSASSA-PKCS1-v1_5",modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:"SHA-256"},true,["sign","verify"]);
-const jwk={...await crypto.subtle.exportKey("jwk",keyPair.publicKey),kid:"acceptance-test"};
 const originalFetch=globalThis.fetch;
-globalThis.fetch=async(url,options)=>{if(String(url).includes("/cdn-cgi/access/certs"))return Response.json({keys:[jwk]});if(String(url).includes("turnstile/v0/siteverify"))return Response.json({success:options.body.get("response")==="valid-turnstile"});throw new Error(`Unexpected test network request: ${url}`);};
+globalThis.fetch=async(url,options)=>{if(String(url).includes("turnstile/v0/siteverify"))return Response.json({success:options.body.get("response")==="valid-turnstile"});throw new Error(`Unexpected test network request: ${url}`);};
 test.after(()=>{globalThis.fetch=originalFetch;});
 const routes={};for(const name of ["appointments","services","customers","form-links","bootstrap","consents"])routes[name]=await bundled(`app/api/admin/${name}/route.ts`);
 const publicRoute=await bundled("app/api/public/form/[token]/route.ts");
@@ -20,8 +18,13 @@ const storage=await bundled("lib/production/storage.ts");
 const consent=await bundled("lib/production/consent.ts");
 const security=await bundled("lib/production/security.ts");
 async function reset(){Object.assign(env,{DB:await database(),SIGNATURES:bucket(),SERVICE_PHOTOS:bucket(),OWNER_EMAILS:"owner@example.test",DEVELOPER_EMAILS:"dev@example.test",ACCESS_AUD:"test-audience",ACCESS_TEAM_DOMAIN:"test.cloudflareaccess.com",APP_ORIGIN:"https://studio.example.test",DATA_ENCRYPTION_KEY:key,BACKUP_ENCRYPTION_KEY:key,TURNSTILE_SITE_KEY:"test",TURNSTILE_SECRET_KEY:"test"});}
-async function jwt(email="owner@example.test",claims={}) {const b64=value=>Buffer.from(JSON.stringify(value)).toString("base64url");const unsigned=b64({alg:"RS256",kid:jwk.kid})+"."+b64({email,aud:env.ACCESS_AUD,iss:`https://${env.ACCESS_TEAM_DOMAIN}`,exp:Math.floor(Date.now()/1000)+3600,...claims});return unsigned+"."+Buffer.from(await crypto.subtle.sign("RSASSA-PKCS1-v1_5",keyPair.privateKey,new TextEncoder().encode(unsigned))).toString("base64url");}
-async function request(path,body,email="owner@example.test",headers={}){return new Request(env.APP_ORIGIN+path,{method:body?"POST":"GET",headers:{"Cf-Access-Jwt-Assertion":await jwt(email),origin:env.APP_ORIGIN,cookie:"lulu_csrf=test-csrf; photo_csrf=photo-test","x-csrf-token":"test-csrf","x-photo-csrf":"photo-test","content-type":"application/json",...headers},body:body?JSON.stringify(body):undefined});}
+async function request(path,body,email="owner@example.test",headers={}){
+  const {createHash}=await import("node:crypto");const token=crypto.randomUUID().replaceAll("-","").repeat(2);const id=email;
+  env.DB.sqlite.prepare("INSERT OR IGNORE INTO auth_accounts(id,email,role,password_hash,must_change_password) VALUES(?,?,?,?,0)").run(id,email,email.startsWith("dev@")?"developer":"owner","unused");
+  env.DB.sqlite.prepare("INSERT INTO auth_sessions(token_hash,account_id,password_version,kind,expires_at,created_at) VALUES(?,?,1,'full',?,?)").run(createHash("sha256").update(token).digest("hex"),id,Math.floor(Date.now()/1000)+3600,Math.floor(Date.now()/1000));
+  if(headers.cookie?.startsWith("photo_csrf="))headers.cookie=`__Host-lulu_session=${token}; ${headers.cookie}`;
+  return new Request(env.APP_ORIGIN+path,{method:body?"POST":"GET",headers:{origin:env.APP_ORIGIN,cookie:`__Host-lulu_session=${token}; lulu_csrf=test-csrf; photo_csrf=photo-test`,"x-csrf-token":"test-csrf","x-photo-csrf":"photo-test","content-type":"application/json",...headers},body:body?JSON.stringify(body):undefined});
+}
 async function customer(){return repository.createCustomer(env,{fullName:"驗收客戶",phone:"0912345678",birthday:"1990-01-01"},"owner@example.test");}
 const png="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS2kAAAAASUVORK5CYII=";
 function payload(overrides={}){return {fullName:"表單驗收",phone:"0999888777",lineId:"test",birthday:"1990-01-01",referralSource:"Instagram",serviceItems:["霧眉"],healthDisclosure:["我沒有懷孕"],healthConditions:["以上皆非"],lipConfirmation:[],serviceNotices:Array(6).fill(true),serviceConfirmation:Array(2).fill(true),photoAuthorization:"僅作為本人術前術後紀錄保存",birthdayOfferConsent:false,reminderConsent:true,signatureDataUrl:png,turnstileToken:"valid-turnstile",...overrides};}
@@ -48,9 +51,10 @@ test("正式客戶、預約訂金、服務編輯、取消及封存恢復會持�
   assert.equal(env.DB.sqlite.prepare("SELECT archived_at FROM customers").get().archived_at,null);
   assert.equal((await routes.customers.GET(await request("/api/admin/customers?q=1990-01-01"))).status,200);
 });
-test("Access 驗證拒絕匿名、錯誤 audience、過期與越權；寫入要求同源 CSRF",async()=>{
+test("站內工作階段拒絕匿名、偽造 Cookie、過期與越權；寫入要求同源 CSRF",async()=>{
   await reset();assert.equal((await routes.bootstrap.GET(new Request(env.APP_ORIGIN+"/api/admin/bootstrap"))).status,401);
-  for(const claims of [{aud:"wrong"},{exp:1}]){const response=await routes.bootstrap.GET(await request("/api/admin/bootstrap",undefined,"owner@example.test",{"Cf-Access-Jwt-Assertion":await jwt("owner@example.test",claims)}));assert.equal(response.status,401);}
+  const forged=await request("/api/admin/bootstrap",undefined,"owner@example.test",{cookie:"__Host-lulu_session="+"0".repeat(64)});assert.equal((await routes.bootstrap.GET(forged)).status,401);
+  const expired=await request("/api/admin/bootstrap");env.DB.sqlite.exec("UPDATE auth_sessions SET expires_at=1");assert.equal((await routes.bootstrap.GET(expired)).status,401);
   assert.equal((await developer.GET(await request("/api/developer/settings"))).status,403);
   assert.equal((await developer.GET(await request("/api/developer/settings",undefined,"dev@example.test"))).status,200);
   assert.equal((await routes.customers.POST(await request("/api/admin/customers",{action:"create"},"owner@example.test",{"x-csrf-token":"bad"}))).status,403);

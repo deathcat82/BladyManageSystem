@@ -3,14 +3,14 @@ import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 export async function bundled(path) {
-  const result=await build({entryPoints:[path],bundle:true,write:false,platform:"node",format:"esm",plugins:[{name:"cloudflare-test-binding",setup(builder){builder.onResolve({filter:/^cloudflare:workers$/},()=>({path:"binding",namespace:"test"}));builder.onLoad({filter:/.*/,namespace:"test"},()=>({contents:"export const env = globalThis.__cloudflareTestEnv;"}));}}]});
+  const result=await build({entryPoints:[path],bundle:true,write:false,platform:"node",format:"esm",plugins:[{name:"cloudflare-test-binding",setup(builder){builder.onResolve({filter:/^cloudflare:sockets$/},()=>({path:"socket",namespace:"test-socket"}));builder.onLoad({filter:/.*/,namespace:"test-socket"},()=>({contents:"export function connect(...args){if(globalThis.__smtpConnect)return globalThis.__smtpConnect(...args);throw new Error(\"Unexpected SMTP network request\")}"}));builder.onResolve({filter:/^cloudflare:workers$/},()=>({path:"binding",namespace:"test"}));builder.onLoad({filter:/.*/,namespace:"test"},()=>({contents:"export const env = globalThis.__cloudflareTestEnv;"}));}}]});
   return import(`data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString("base64")}`);
 }
 export async function database(upgrade=true) {
   const sqlite=new DatabaseSync(":memory:");
   sqlite.exec(await readFile("drizzle-production/0000_production_schema.sql","utf8"));
-  if(upgrade) { sqlite.exec("BEGIN");sqlite.exec(await readFile("drizzle-production/0001_demo_parity.sql","utf8"));sqlite.exec("COMMIT"); }
-  const db={sqlite,prepare(sql){const statement={args:[],bind(...args){this.args=args;return this;},async run(){const result=sqlite.prepare(sql).run(...this.args);return {success:true,meta:{changes:Number(result.changes)}};},async first(column){const row=sqlite.prepare(sql).get(...this.args);return row?(column?row[column]:row):null;},async all(){return {success:true,results:sqlite.prepare(sql).all(...this.args)};}};return statement;},async batch(statements){sqlite.exec("BEGIN");try{const result=[];for(const statement of statements)result.push(await statement.run());sqlite.exec("COMMIT");return result;}catch(error){sqlite.exec("ROLLBACK");throw error;}}};
+  if(upgrade) { sqlite.exec("BEGIN");sqlite.exec(await readFile("drizzle-production/0001_demo_parity.sql","utf8"));sqlite.exec("COMMIT");sqlite.exec(await readFile("drizzle-production/0002_site_auth.sql","utf8")); }
+  const db={sqlite,prepare(sql){const statement={sql,args:[],bind(...args){this.args=args;return this;},async run(){const result=sqlite.prepare(sql).run(...this.args);return {success:true,meta:{changes:Number(result.changes)}};},async first(column){const row=sqlite.prepare(sql).get(...this.args);return row?(column?row[column]:row):null;},async all(){return {success:true,results:sqlite.prepare(sql).all(...this.args)};}};return statement;},async batch(statements){sqlite.exec("BEGIN");try{const result=[];for(const statement of statements){const value=sqlite.prepare(statement.sql).run(...statement.args);result.push({success:true,meta:{changes:Number(value.changes)}});}sqlite.exec("COMMIT");return result;}catch(error){sqlite.exec("ROLLBACK");throw error;}}};
   return db;
 }
 export function bucket() {

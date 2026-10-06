@@ -11,9 +11,9 @@ catch { throw new Error("找不到目標 Wrangler 設定檔。請先由 wrangler
 
 const config = JSON.parse(replacement);
 const vars = config.vars || {};
-const secrets = ["OWNER_EMAILS", "DEVELOPER_EMAILS", "DATA_ENCRYPTION_KEY", "BACKUP_ENCRYPTION_KEY", "TURNSTILE_SECRET_KEY"];
+const secrets = ["OWNER_EMAILS", "DEVELOPER_EMAILS", "DATA_ENCRYPTION_KEY", "BACKUP_ENCRYPTION_KEY", "TURNSTILE_SECRET_KEY", "SMTP_APP_PASSWORD", "AUTH_HMAC_SECRET"];
 if (secrets.some(name => name in vars)) throw new Error("Secret 不得放在 Wrangler vars，請使用 Cloudflare Secret。");
-if (!vars.APP_ORIGIN || !vars.ACCESS_AUD || !vars.ACCESS_TEAM_DOMAIN || !vars.TURNSTILE_SITE_KEY) throw new Error("正式環境缺少 Origin、Access 或 Turnstile 設定。");
+if (!vars.APP_ORIGIN || !vars.SMTP_USER || !vars.TURNSTILE_SITE_KEY) throw new Error("正式環境缺少 Origin、寄件帳號或 Turnstile 設定。");
 if ([config.name, ...Object.values(vars), config.d1_databases?.[0]?.database_id].some(value => typeof value !== "string" || /pending|replace|your[_-]/i.test(value))) throw new Error("設定仍有未填入的佔位值，停止發布。");
 if (config.name.includes("demo") || config.d1_databases?.length !== 1 || config.d1_databases[0].database_name.includes("demo") || config.d1_databases[0].migrations_dir !== "./drizzle-production") throw new Error("拒絕使用 Demo 資源或 migrations 發布正式版。");
 for (const binding of ["SIGNATURES", "SERVICE_PHOTOS"]) if (!config.r2_buckets?.some(item => item.binding === binding && !item.bucket_name.includes("demo"))) throw new Error(`缺少正式私有 ${binding} 綁定。`);

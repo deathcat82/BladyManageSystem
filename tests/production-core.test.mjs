@@ -31,7 +31,7 @@ test("正式資料庫 migration 是空白資料庫，包含外鍵、唯一電話
   assert.doesNotMatch(migration, /demo-client|INSERT INTO customers/i);
 });
 
-test("正式版安全實作會驗證 Access JWT、CSRF、Turnstile 與一次性表單原子鎖定", async () => {
+test("正式版安全實作會驗證站內工作階段、CSRF、Turnstile 與一次性表單原子鎖定", async () => {
   const [security, publicRoute, repository, worker, config, home, productionHome] = await Promise.all([
     readFile(new URL("../lib/production/security.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/public/form/[token]/route.ts", import.meta.url), "utf8"),
@@ -41,8 +41,8 @@ test("正式版安全實作會驗證 Access JWT、CSRF、Turnstile 與一次性�
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/production-home.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(security, /Cf-Access-Jwt-Assertion/);
-  assert.match(security, /RSASSA-PKCS1-v1_5/);
+  assert.match(security, /requireSession/);
+
   assert.match(security, /x-csrf-token/);
   assert.match(publicRoute, /turnstile\/v0\/siteverify/);
   assert.match(publicRoute, /claimPublicLink/);

@@ -11,8 +11,7 @@
   "r2_buckets": [{ "binding": "SIGNATURES", "bucket_name": "REPLACE_WITH_PRIVATE_R2_BUCKET" }, { "binding": "SERVICE_PHOTOS", "bucket_name": "REPLACE_WITH_PRIVATE_R2_BUCKET" }],
   "vars": {
     "APP_ORIGIN": "https://REPLACE_WITH_NEW_SUBDOMAIN.workers.dev",
-    "ACCESS_TEAM_DOMAIN": "REPLACE_WITH_ACCESS_TEAM.cloudflareaccess.com",
-    "ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
+    "SMTP_USER": "jerry.master.claw@gmail.com",
     "TURNSTILE_SITE_KEY": "REPLACE_WITH_TURNSTILE_SITE_KEY"
   }
 }
