@@ -1,6 +1,8 @@
 # 站內登入與 Gmail 驗證碼
 
-目前程式已實作，staging 已備份並套用 `0002_site_auth.sql`、初始化兩個預設帳號。正式 Worker 及 Access 尚未切換；Gmail 應用程式密碼與實際收信驗收尚待完成。
+目前程式已實作，staging 已備份並套用 `0002_site_auth.sql`、初始化兩個預設帳號。2026-10-06 已設定 staging 與正式 Gmail Secret，發布 staging 版本 `5f8a59a6-7d38-433f-9dbf-820140f43097`，以開發者帳號的臨時密碼實測：Gmail SMTP 接受寄信，頁面進入驗證碼步驟。信箱實際收信與首次改密碼需由本人完成，尚未標示驗收通過。
+
+正式 D1 備份、Worker 版本／設定、R2 清單及 Dashboard 的 Access 設定已保存於忽略的 outputs 目錄。正式站尚未套用 auth migration 或發布新登入程式；正式及 staging Access 保護仍保留，等本人驗證後再切換。
 
 ## 使用方式
 
